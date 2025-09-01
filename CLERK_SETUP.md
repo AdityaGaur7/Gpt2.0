@@ -97,7 +97,7 @@ All your API routes are now protected with Clerk authentication:
 
 ### AI Integration Update
 
-**Change:** Updated from direct Gemini API to Vercel AI SDK for better integration and streaming support.
+**Change:** Updated to use Vercel AI SDK with `@ai-sdk/google` for modern AI integration and streaming support.
 
 **Benefits:**
 
@@ -105,6 +105,7 @@ All your API routes are now protected with Clerk authentication:
 - Improved streaming performance
 - More reliable API integration
 - Better TypeScript support
+- Modern AI SDK approach with `streamText` and `generateText`
 
 ### Pages Router Authentication Fix
 

@@ -9,8 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^2.0.11",
+    "@ai-sdk/openai": "^2.0.23",
+    "@ai-sdk/react": "^2.0.29",
     "@clerk/nextjs": "^5.0.0",
     "@radix-ui/react-slot": "^1.2.3",
+    "ai": "^5.0.29",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^1.30.0",
     "clsx": "^2.1.1",
@@ -20,7 +24,8 @@
     "node-fetch": "^3.0.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

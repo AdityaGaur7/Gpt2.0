@@ -75,37 +75,10 @@ export default async function handler(
 
     // Read from aiStream and forward chunks
     if (aiStream) {
-      // Handle Vercel AI ReadableStream
-      const chunks: Buffer[] = [];
-      for await (const chunk of aiStream as NodeJS.ReadableStream) {
-        chunks.push(Buffer.from(chunk));
-      }
-
-      const fullResponse = Buffer.concat(chunks).toString();
-      const lines = fullResponse.split("\n");
-
-      for (const line of lines) {
-        if (line.trim() && line.startsWith("data: ")) {
-          const data = line.slice(6);
-
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === "text-delta" && parsed.textDelta) {
-              // Vercel AI format
-              res.write(
-                `data: ${JSON.stringify({ chunk: parsed.textDelta })}\n\n`
-              );
-            } else if (
-              parsed.candidates &&
-              parsed.candidates[0]?.content?.parts?.[0]?.text
-            ) {
-              // Legacy Gemini format (fallback)
-              const content = parsed.candidates[0].content.parts[0].text;
-              res.write(`data: ${JSON.stringify({ chunk: content })}\n\n`);
-            }
-          } catch {
-            // Skip invalid JSON
-          }
+      // Handle Vercel AI text stream
+      for await (const chunk of aiStream) {
+        if (typeof chunk === "string") {
+          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
         }
       }
     }
