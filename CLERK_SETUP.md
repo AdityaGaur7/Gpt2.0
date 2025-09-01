@@ -106,6 +106,12 @@ All your API routes are now protected with Clerk authentication:
 - More reliable API integration
 - Better TypeScript support
 
+### Pages Router Authentication Fix
+
+**Problem:** The error "Clerk: auth() and currentUser() are only supported in App Router" was occurring because the API routes were using `auth()` from Clerk, which is only available in App Router.
+
+**Solution:** Updated all Pages Router API routes to use `getAuth(req)` instead of `await auth()`. This is the correct approach for Pages Router API routes.
+
 ## 🎨 Customization Options
 
 ### Custom Sign-In/Sign-Up Pages

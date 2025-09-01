@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { auth } from "@clerk/nextjs/server";
+import { getAuth } from "@clerk/nextjs/server";
 import { getDb } from "../../../lib/db";
 import { ObjectId } from "mongodb";
 
@@ -8,7 +8,7 @@ export default async function handler(
   res: NextApiResponse
 ): Promise<void> {
   // Get authenticated user from Clerk
-  const { userId: clerkUserId } = await auth();
+  const { userId: clerkUserId } = getAuth(req);
 
   if (!clerkUserId) {
     return res.status(401).json({ error: "Unauthorized" });

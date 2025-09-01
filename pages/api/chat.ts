@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { auth } from "@clerk/nextjs/server";
+import { getAuth } from "@clerk/nextjs/server";
 import { getDb } from "../../lib/db";
 import { streamChatResponse } from "../../lib/vercelAI";
 
@@ -13,7 +13,7 @@ export default async function handler(
   }
 
   // Get authenticated user from Clerk
-  const { userId: clerkUserId } = await auth();
+  const { userId: clerkUserId } = getAuth(req);
 
   if (!clerkUserId) {
     return res.status(401).json({ error: "Unauthorized" });
