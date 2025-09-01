@@ -11,6 +11,8 @@ import { Paperclip, Send } from "lucide-react";
 export type ComposerFile = {
   id: string;
   name: string;
+  url?: string;
+  type?: string;
 };
 
 type Props = {

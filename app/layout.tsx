@@ -32,10 +32,11 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        >
+      <html
+        lang="en"
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <body className="vsc-initialized">
           <header className="p-4 border-b">
             <div className="max-w-7xl mx-auto flex justify-between items-center">
               <h1 className="text-xl font-bold">Chatgpt 2.0</h1>

@@ -23,10 +23,10 @@ export default async function handler(
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { messages: incomingMessages, model = "gemini-2.0-flash" } = req.body;
+  const { messages, model = "gemini-2.0-flash", messageId } = req.body;
 
-  // basic validation
-  if (!Array.isArray(incomingMessages)) {
+  // Basic validation
+  if (!Array.isArray(messages)) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
@@ -34,11 +34,10 @@ export default async function handler(
 
   try {
     // 1) Fetch mem0 entries for user and prepend system context
-    // Use Clerk user ID as string instead of MongoDB ObjectId
     const mems = await db
       .collection("memories")
       .find({
-        userId: clerkUserId, // Use Clerk user ID directly
+        userId: clerkUserId,
       })
       .toArray();
 
@@ -47,24 +46,25 @@ export default async function handler(
       .join("\n");
 
     // 2) Build messages to send to model; include memory as system message
-    const messages = [];
+    const messagesWithMemory = [];
     if (memorySystemText) {
-      messages.push({ role: "system", content: memorySystemText });
+      messagesWithMemory.push({ role: "system", content: memorySystemText });
     }
 
-    incomingMessages.forEach(
-      (m: { role: string; text?: string; content?: string }) => {
-        messages.push({ role: m.role, content: m.text || m.content || "" });
-      }
-    );
+    messages.forEach((m: { role: string; text?: string; content?: string }) => {
+      messagesWithMemory.push({
+        role: m.role,
+        content: m.text || m.content || "",
+      });
+    });
 
     // 3) Apply token-based trimming to fit within context window
-    let finalMessages = messages;
-    if (!conversationFitsInContext(messages, model)) {
+    let finalMessages = messagesWithMemory;
+    if (!conversationFitsInContext(messagesWithMemory, model)) {
       console.log(`Conversation too long for ${model}, trimming...`);
-      finalMessages = trimConversationToFit(messages, model);
+      finalMessages = trimConversationToFit(messagesWithMemory, model);
       console.log(
-        `Trimmed from ${messages.length} to ${finalMessages.length} messages`
+        `Trimmed from ${messagesWithMemory.length} to ${finalMessages.length} messages`
       );
     }
 
@@ -73,7 +73,7 @@ export default async function handler(
       model,
     });
 
-    // Set up SSE headers
+    // pipe the AI stream directly to client (preserve streaming)
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       Connection: "keep-alive",
@@ -104,7 +104,7 @@ export default async function handler(
 
     res.end();
   } catch (err: unknown) {
-    console.error("Chat API error:", err);
+    console.error("Regenerate API error:", err);
     const errorMessage = err instanceof Error ? err.message : "AI error";
     return res.status(500).json({ error: errorMessage });
   }

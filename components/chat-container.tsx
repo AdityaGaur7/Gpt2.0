@@ -10,10 +10,11 @@ export default function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const assistantDraftRef = useRef<string>("");
+  const draftIdRef = useRef<string>("");
   const canScrollId = useMemo(() => crypto.randomUUID(), []);
   const { user, isLoaded } = useUser();
 
-  async function addMessage(text: string, _files: ComposerFile[]) {
+  async function addMessage(text: string, files: ComposerFile[]) {
     // Check if user is authenticated
     if (!user) {
       console.error("User not authenticated");
@@ -24,20 +25,30 @@ export default function ChatContainer() {
       id: crypto.randomUUID(),
       role: "user",
       content: text,
+      files:
+        files.length > 0
+          ? files.map((f) => ({
+              name: f.name,
+              url: f.url || "",
+              type: f.type || "unknown",
+            }))
+          : undefined,
     };
     setMessages((prev) => [...prev, userMsg]);
 
     // Call API to stream response
     setIsStreaming(true);
+    draftIdRef.current = crypto.randomUUID(); // Generate unique draft ID
+    assistantDraftRef.current = ""; // Reset draft content
 
     try {
-      const resp = await fetch("/api/chat", {
+      const resp = await fetch("/api/chat-simple", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.id, // Use Clerk user ID instead of hardcoded demo ID
           messages: [...messages, userMsg],
-          model: "gemini-1.5-flash",
+          model: "gemini-2.0-flash",
         }),
       });
 
@@ -70,23 +81,30 @@ export default function ChatContainer() {
                     assistantDraftRef.current = draft;
                     setMessages((m) => {
                       const withoutDraft = m.filter(
-                        (x) => x.role !== "assistant-draft"
+                        (x) => x.id !== draftIdRef.current
                       );
                       return [
                         ...withoutDraft,
                         {
-                          id: "assistant-draft",
+                          id: draftIdRef.current,
                           role: "assistant",
                           content: draft,
                         },
                       ];
                     });
+                  } else if (payload.error) {
+                    console.error("Stream error:", payload.error);
+                    throw new Error(payload.error);
+                  } else if (payload.done) {
+                    // Stream completed successfully
+                    break;
                   }
                 }
               }
             }
           } catch (e) {
             console.error("Stream parse error", e);
+            throw e; // Re-throw to be caught by outer try-catch
           }
         }
       }
@@ -105,7 +123,7 @@ export default function ChatContainer() {
       setIsStreaming(false);
       // Replace draft with final message
       setMessages((m) => {
-        const withoutDraft = m.filter((x) => x.role !== "assistant-draft");
+        const withoutDraft = m.filter((x) => x.id !== draftIdRef.current);
         return [
           ...withoutDraft,
           {
@@ -116,6 +134,7 @@ export default function ChatContainer() {
         ];
       });
       assistantDraftRef.current = "";
+      draftIdRef.current = "";
     }
   }
 

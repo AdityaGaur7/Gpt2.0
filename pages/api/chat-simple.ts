@@ -2,10 +2,6 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getAuth } from "@clerk/nextjs/server";
 import { getDb } from "../../lib/db";
 import { streamChatResponse } from "../../lib/vercelAI";
-import {
-  trimConversationToFit,
-  conversationFitsInContext,
-} from "../../lib/tokenManager";
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,7 +21,7 @@ export default async function handler(
 
   const { messages: incomingMessages, model = "gemini-2.0-flash" } = req.body;
 
-  // basic validation
+  // Basic validation
   if (!Array.isArray(incomingMessages)) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -34,11 +30,10 @@ export default async function handler(
 
   try {
     // 1) Fetch mem0 entries for user and prepend system context
-    // Use Clerk user ID as string instead of MongoDB ObjectId
     const mems = await db
       .collection("memories")
       .find({
-        userId: clerkUserId, // Use Clerk user ID directly
+        userId: clerkUserId,
       })
       .toArray();
 
@@ -58,18 +53,8 @@ export default async function handler(
       }
     );
 
-    // 3) Apply token-based trimming to fit within context window
-    let finalMessages = messages;
-    if (!conversationFitsInContext(messages, model)) {
-      console.log(`Conversation too long for ${model}, trimming...`);
-      finalMessages = trimConversationToFit(messages, model);
-      console.log(
-        `Trimmed from ${messages.length} to ${finalMessages.length} messages`
-      );
-    }
-
     const aiStream = await streamChatResponse({
-      messages: finalMessages,
+      messages,
       model,
     });
 

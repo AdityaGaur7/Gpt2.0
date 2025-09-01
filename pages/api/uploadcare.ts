@@ -1,14 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getAuth } from "@clerk/nextjs/server";
-import { v2 as cloudinary } from "cloudinary";
+import { uploadcareService } from "../../lib/uploadcare";
 import { getDb } from "../../lib/db";
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 export default async function handler(
   req: NextApiRequest,
@@ -59,38 +52,35 @@ export default async function handler(
   }
 
   try {
-    // Upload by fetching remote file and uploading to Cloudinary
-    const result = await cloudinary.uploader.upload(fileUrl, {
-      resource_type: "auto",
-      public_id: `uploads/${clerkUserId}/${Date.now()}_${fileName || "file"}`,
-      folder: `chat-uploads/${clerkUserId}`,
-      use_filename: true,
-      unique_filename: true,
+    // Upload file to Uploadcare
+    const uploadResult = await uploadcareService.uploadFromUrl(fileUrl, {
+      fileName: fileName,
     });
 
     // Store file metadata in database
     const db = await getDb();
     await db.collection("uploads").insertOne({
       userId: clerkUserId,
-      fileName: fileName || result.original_filename,
-      fileType: fileType || result.format,
-      fileSize: fileSize || result.bytes,
-      cloudinaryUrl: result.secure_url,
-      cloudinaryPublicId: result.public_id,
+      fileName: uploadResult.name,
+      fileType: uploadResult.mimeType,
+      fileSize: uploadResult.size,
+      uploadcareUuid: uploadResult.uuid,
+      uploadcareUrl: uploadResult.url,
+      uploadcareCdnUrl: uploadResult.cdnUrl,
       uploadedAt: new Date(),
     });
 
     res.json({
-      id: result.public_id,
-      url: result.secure_url,
-      fileName: fileName || result.original_filename,
-      fileType: fileType || result.format,
-      fileSize: fileSize || result.bytes,
+      id: uploadResult.uuid,
+      url: uploadResult.cdnUrl,
+      fileName: uploadResult.name,
+      fileType: uploadResult.mimeType,
+      fileSize: uploadResult.size,
       uploadedAt: new Date().toISOString(),
     });
     return;
   } catch (error: unknown) {
-    console.error("Upload error:", error);
+    console.error("Uploadcare upload error:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Upload failed";
     res.status(500).json({ error: errorMessage });
