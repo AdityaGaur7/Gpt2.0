@@ -48,14 +48,66 @@ export default function Composer({ onSend, disabled = false }: Props) {
     setFiles([]);
   }
 
-  function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const list = e.target.files;
     if (!list) return;
-    const next = Array.from(list).map((f) => ({
-      id: crypto.randomUUID(),
-      name: f.name,
-    }));
-    setFiles((prev) => [...prev, ...next]);
+
+    const newFiles: ComposerFile[] = [];
+
+    for (const file of Array.from(list)) {
+      // Validate file size (max 20MB)
+      if (file.size > 20 * 1024 * 1024) {
+        alert(`File ${file.name} is too large. Maximum size is 20MB.`);
+        continue;
+      }
+
+      // Validate file type
+      const allowedTypes = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+        "text/plain",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        alert(`File type ${file.type} is not supported.`);
+        continue;
+      }
+
+      // Upload file to get URL
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        newFiles.push({
+          id: crypto.randomUUID(),
+          name: file.name,
+          url: result.url,
+          type: file.type,
+        });
+      } catch (error) {
+        console.error(`Error uploading file ${file.name}:`, error);
+        alert(`Failed to upload ${file.name}. Please try again.`);
+      }
+    }
+
+    setFiles((prev) => [...prev, ...newFiles]);
     if (fileInput.current) fileInput.current.value = "";
   }
 
@@ -110,12 +162,24 @@ export default function Composer({ onSend, disabled = false }: Props) {
               aria-label="Attached files"
             >
               {files.map((f) => (
-                <span
+                <div
                   key={f.id}
-                  className="text-xs rounded-md border bg-muted px-2 py-1"
+                  className="flex items-center gap-2 text-xs rounded-md border bg-muted px-2 py-1"
                 >
-                  {f.name}
-                </span>
+                  <span>{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFiles((prev) =>
+                        prev.filter((file) => file.id !== f.id)
+                      )
+                    }
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={`Remove ${f.name}`}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
           )}

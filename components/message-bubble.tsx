@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Copy, Edit2, Trash2, Check, X } from "lucide-react";
+import Image from "next/image";
 
 export type Message = {
   id: string;
@@ -86,7 +87,32 @@ export default function MessageBubble({ message, onDelete, onEdit }: Props) {
             </div>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap text-pretty">{message.content}</p>
+          <div className="space-y-2">
+            <p className="whitespace-pre-wrap text-pretty">{message.content}</p>
+            {message.files && message.files.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {message.files.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 p-2 bg-muted/50 rounded-md"
+                  >
+                    <span className="text-xs text-muted-foreground">
+                      {file.name}
+                    </span>
+                    {file.type.startsWith("image/") && (
+                      <Image
+                        src={file.url}
+                        alt={file.name}
+                        width={64}
+                        height={64}
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

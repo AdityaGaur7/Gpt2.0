@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import MessageBubble, { type Message } from "./message-bubble";
 import Composer, { type ComposerFile } from "./composer";
@@ -13,6 +13,16 @@ export default function ChatContainer() {
   const draftIdRef = useRef<string>("");
   const canScrollId = useMemo(() => crypto.randomUUID(), []);
   const { user, isLoaded } = useUser();
+
+  // Listen for "new-chat" events to reset conversation
+  useEffect(() => {
+    function onNewChat() {
+      setMessages([]);
+    }
+    window.addEventListener("new-chat", onNewChat as EventListener);
+    return () =>
+      window.removeEventListener("new-chat", onNewChat as EventListener);
+  }, []);
 
   async function addMessage(text: string, files: ComposerFile[]) {
     // Check if user is authenticated
@@ -35,6 +45,18 @@ export default function ChatContainer() {
           : undefined,
     };
     setMessages((prev) => [...prev, userMsg]);
+    // Fire-and-forget: record in Mem0 history if available
+    try {
+      fetch("/api/chat-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      })
+        .then(() => {
+          window.dispatchEvent(new CustomEvent("refresh-history"));
+        })
+        .catch(() => {});
+    } catch {}
 
     // Call API to stream response
     setIsStreaming(true);
@@ -197,7 +219,7 @@ export default function ChatContainer() {
       </div>
 
       <div className="flex-1">
-        <div className="mx-auto w-full max-w-3xl px-3 pb-28 pt-6 space-y-4">
+        <div className="mx-auto w-full max-w-3xl px-3 pb-28 pt-6 space-y-4 overflow-hidden">
           {messages.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <h2 className="text-xl font-semibold mb-2">
@@ -214,23 +236,7 @@ export default function ChatContainer() {
               onEdit={onEdit}
             />
           ))}
-          {isStreaming && (
-            <div className="flex justify-start">
-              <div className="max-w-2xl rounded-lg px-4 py-3 text-sm leading-relaxed bg-card text-foreground shadow-sm border">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
-                  <div
-                    className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
-                    style={{ animationDelay: "0.2s" }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
-                    style={{ animationDelay: "0.4s" }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          )}
+
           {/* Scroll anchor */}
           <div id={canScrollId} />
         </div>

@@ -17,16 +17,20 @@ export default async function handler(
   const { id } = req.query;
   const db = await getDb();
 
-  if (!ObjectId.isValid(String(id))) {
-    res.status(400).json({ error: "Invalid message ID" });
-    return;
-  }
+  // Frontend uses UUIDs for message IDs. If it's not an ObjectId, treat as ephemeral and return success.
+  const isMongoId = ObjectId.isValid(String(id));
 
   if (req.method === "PATCH") {
     const { newText, regenerate } = req.body;
 
     if (!newText) {
       res.status(400).json({ error: "Missing newText" });
+      return;
+    }
+
+    if (!isMongoId) {
+      // No persistent store for UUID messages; acknowledge edit request
+      res.json({ ok: true, regenerate: false, id });
       return;
     }
 

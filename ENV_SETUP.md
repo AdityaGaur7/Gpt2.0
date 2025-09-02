@@ -28,6 +28,10 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 # Get from: https://uploadcare.com
 NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY=your_uploadcare_public_key
 UPLOADCARE_SECRET_KEY=your_uploadcare_secret_key
+
+# File Upload Configuration
+# Maximum file size for uploads (in bytes)
+MAX_FILE_SIZE=20971520  # 20MB
 ```
 
 ## 2. Get API Keys
@@ -66,6 +70,28 @@ UPLOADCARE_SECRET_KEY=your_uploadcare_secret_key
 2. Create a free account
 3. Get your public key and secret key
 4. Add them to your `.env.local` file
+
+## Supported File Types
+
+The chat application supports the following file types for upload:
+
+### Images
+
+- JPEG (.jpg, .jpeg)
+- PNG (.png)
+- GIF (.gif)
+- WebP (.webp)
+
+### Documents
+
+- PDF (.pdf)
+- Text files (.txt)
+- Microsoft Word (.doc, .docx)
+
+### File Size Limits
+
+- Maximum file size: 20MB per file
+- Multiple files can be attached to a single message
 
 ## 3. Restart the development server
 

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { SignOutButton } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -9,11 +8,30 @@ import { Menu, Plus, LogOut, Sun, Trash2 } from "lucide-react";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
-  const chats = [
-    { id: "1", title: "Chatbot definition expl..." },
-    { id: "2", title: "Weekly plan" },
-    { id: "3", title: "Frontend tips" },
-  ];
+  const [chats, setChats] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/chat-history", { method: "GET" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setChats(data.items || []);
+      } catch {
+        // ignore
+      }
+    }
+    load();
+    function onRefresh() {
+      load();
+    }
+    window.addEventListener("refresh-history", onRefresh as EventListener);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("refresh-history", onRefresh as EventListener);
+    };
+  }, []);
 
   return (
     <>
@@ -24,6 +42,9 @@ export default function Sidebar() {
             variant="default"
             className="w-full justify-start gap-2"
             aria-label="New chat"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("new-chat"));
+            }}
           >
             <Plus className="h-4 w-4" />
             New chat
@@ -62,17 +83,16 @@ export default function Sidebar() {
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-            <SignOutButton>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full bg-transparent"
-                aria-label="Log out"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Log out
-              </Button>
-            </SignOutButton>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full bg-transparent"
+              aria-label="Log out"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Log out
+            </Button>
           </div>
         </div>
       </div>
@@ -91,7 +111,15 @@ export default function Sidebar() {
             </Button>
             <div className="text-sm font-medium">Chat</div>
             <div className="ml-auto">
-              <Button variant="default" size="sm" aria-label="New chat mobile">
+              <Button
+                variant="default"
+                size="sm"
+                aria-label="New chat mobile"
+                onClick={() => {
+                  setOpen(false);
+                  window.dispatchEvent(new CustomEvent("new-chat"));
+                }}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 New
               </Button>
@@ -139,17 +167,15 @@ export default function Sidebar() {
                 </nav>
               </div>
               <div className="mt-auto border-t p-3">
-                <SignOutButton>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full bg-transparent"
-                    aria-label="Log out"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Log out
-                  </Button>
-                </SignOutButton>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full bg-transparent"
+                  aria-label="Log out"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Log out
+                </Button>
               </div>
             </div>
           </div>
