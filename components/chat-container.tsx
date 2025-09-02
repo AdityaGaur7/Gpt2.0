@@ -9,6 +9,8 @@ import Sidebar from "./sidebar";
 export default function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
   const assistantDraftRef = useRef<string>("");
   const draftIdRef = useRef<string>("");
   const canScrollId = useMemo(() => crypto.randomUUID(), []);
@@ -63,6 +65,17 @@ export default function ChatContainer() {
     draftIdRef.current = crypto.randomUUID(); // Generate unique draft ID
     assistantDraftRef.current = ""; // Reset draft content
 
+    // Add loading message bubble immediately
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: draftIdRef.current,
+        role: "assistant",
+        content: "Thinking...",
+        isLoading: true,
+      },
+    ]);
+
     try {
       const resp = await fetch("/api/chat-simple", {
         method: "POST",
@@ -111,6 +124,7 @@ export default function ChatContainer() {
                           id: draftIdRef.current,
                           role: "assistant",
                           content: draft,
+                          isLoading: false,
                         },
                       ];
                     });
@@ -152,6 +166,7 @@ export default function ChatContainer() {
             id: crypto.randomUUID(),
             role: "assistant",
             content: assistantDraftRef.current,
+            isLoading: false,
           },
         ];
       });
@@ -164,20 +179,252 @@ export default function ChatContainer() {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   }
 
+  async function onRegenerate(id: string) {
+    // Find the message to regenerate and all messages before it
+    const messageIndex = messages.findIndex((m) => m.id === id);
+    if (messageIndex === -1) return;
+
+    // Keep all messages up to and including the one before the assistant response
+    const messagesUpToRegenerate = messages.slice(0, messageIndex);
+    setMessages(messagesUpToRegenerate);
+
+    // Regenerate response
+    setIsStreaming(true);
+    draftIdRef.current = crypto.randomUUID();
+    assistantDraftRef.current = "";
+
+    // Add loading message bubble
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: draftIdRef.current,
+        role: "assistant",
+        content: "Thinking...",
+        isLoading: true,
+      },
+    ]);
+
+    try {
+      const resp = await fetch("/api/chat-simple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id,
+          messages: messagesUpToRegenerate,
+          model: "gemini-2.0-flash",
+        }),
+      });
+
+      if (!resp.ok) {
+        throw new Error(`API error: ${resp.status}`);
+      }
+
+      // Handle SSE streaming for regeneration
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let draft = "";
+
+      while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        done = streamDone;
+
+        if (value) {
+          const chunk = decoder.decode(value);
+          try {
+            const lines = chunk.split("\n");
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6);
+                if (data.trim()) {
+                  const payload = JSON.parse(data);
+                  if (payload.chunk) {
+                    draft += payload.chunk;
+                    assistantDraftRef.current = draft;
+                    setMessages((m) => {
+                      const withoutDraft = m.filter(
+                        (x) => x.id !== draftIdRef.current
+                      );
+                      return [
+                        ...withoutDraft,
+                        {
+                          id: draftIdRef.current,
+                          role: "assistant",
+                          content: draft,
+                          isLoading: false,
+                        },
+                      ];
+                    });
+                  } else if (payload.error) {
+                    console.error("Stream error:", payload.error);
+                    throw new Error(payload.error);
+                  } else if (payload.done) {
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Stream parse error", e);
+            throw e;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Regeneration error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content:
+            "Sorry, I encountered an error while regenerating the response. Please try again.",
+        },
+      ]);
+    } finally {
+      setIsStreaming(false);
+      // Replace draft with final message
+      setMessages((m) => {
+        const withoutDraft = m.filter((x) => x.id !== draftIdRef.current);
+        return [
+          ...withoutDraft,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: assistantDraftRef.current,
+            isLoading: false,
+          },
+        ];
+      });
+      assistantDraftRef.current = "";
+      draftIdRef.current = "";
+    }
+  }
+
   async function onEdit(id: string, content: string) {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, content } : m))
+    // Find the edited message and all messages after it
+    const messageIndex = messages.findIndex((m) => m.id === id);
+    if (messageIndex === -1) return;
+
+    // Create updated messages array with the edited content
+    const updatedMessages = messages.map((m, index) =>
+      index === messageIndex ? { ...m, content } : m
     );
 
-    // Call API to update message
+    // Remove all messages after the edited one (including the assistant's response)
+    const messagesUpToEdit = updatedMessages.slice(0, messageIndex + 1);
+    setMessages(messagesUpToEdit);
+
+    // Regenerate response with the edited message
+    setIsStreaming(true);
+    draftIdRef.current = crypto.randomUUID();
+    assistantDraftRef.current = "";
+
+    // Add loading message bubble
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: draftIdRef.current,
+        role: "assistant",
+        content: "Thinking...",
+        isLoading: true,
+      },
+    ]);
+
     try {
-      await fetch(`/api/messages/${id}`, {
-        method: "PATCH",
+      const resp = await fetch("/api/chat-simple", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newText: content, regenerate: true }),
+        body: JSON.stringify({
+          userId: user?.id,
+          messages: messagesUpToEdit,
+          model: "gemini-2.0-flash",
+        }),
       });
+
+      if (!resp.ok) {
+        throw new Error(`API error: ${resp.status}`);
+      }
+
+      // Handle SSE streaming for regeneration
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let draft = "";
+
+      while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        done = streamDone;
+
+        if (value) {
+          const chunk = decoder.decode(value);
+          try {
+            const lines = chunk.split("\n");
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6);
+                if (data.trim()) {
+                  const payload = JSON.parse(data);
+                  if (payload.chunk) {
+                    draft += payload.chunk;
+                    assistantDraftRef.current = draft;
+                    setMessages((m) => {
+                      const withoutDraft = m.filter(
+                        (x) => x.id !== draftIdRef.current
+                      );
+                      return [
+                        ...withoutDraft,
+                        {
+                          id: draftIdRef.current,
+                          role: "assistant",
+                          content: draft,
+                          isLoading: false,
+                        },
+                      ];
+                    });
+                  } else if (payload.error) {
+                    console.error("Stream error:", payload.error);
+                    throw new Error(payload.error);
+                  } else if (payload.done) {
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Stream parse error", e);
+            throw e;
+          }
+        }
+      }
     } catch (error) {
-      console.error("Edit error:", error);
+      console.error("Regeneration error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content:
+            "Sorry, I encountered an error while regenerating the response. Please try again.",
+        },
+      ]);
+    } finally {
+      setIsStreaming(false);
+      // Replace draft with final message
+      setMessages((m) => {
+        const withoutDraft = m.filter((x) => x.id !== draftIdRef.current);
+        return [
+          ...withoutDraft,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: assistantDraftRef.current,
+            isLoading: false,
+          },
+        ];
+      });
+      assistantDraftRef.current = "";
+      draftIdRef.current = "";
     }
   }
 
@@ -234,6 +481,7 @@ export default function ChatContainer() {
               message={m}
               onDelete={onDelete}
               onEdit={onEdit}
+              onRegenerate={onRegenerate}
             />
           ))}
 
@@ -242,7 +490,31 @@ export default function ChatContainer() {
         </div>
       </div>
 
-      <Composer onSend={addMessage} disabled={isStreaming} />
+      <Composer
+        onSend={addMessage}
+        disabled={isStreaming || isUploading}
+        onUploadStart={() => {
+          setIsUploading(true);
+          // Add uploading message bubble
+          const uploadId = crypto.randomUUID();
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: uploadId,
+              role: "user",
+              content: "Uploading files...",
+              isLoading: true,
+            },
+          ]);
+        }}
+        onUploadEnd={() => {
+          setIsUploading(false);
+          // Remove uploading message bubble
+          setMessages((prev) =>
+            prev.filter((m) => !m.isLoading || m.role !== "user")
+          );
+        }}
+      />
     </div>
   );
 }

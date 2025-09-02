@@ -102,45 +102,46 @@ export async function processFileFromUrlAsText(
   fileName: string
 ): Promise<ProcessedTextFile | ProcessedFile> {
   try {
-    console.log(`Fetching file from URL: ${fileUrl}`);
-    
     // Fetch file from URL with proper headers
     const response = await fetch(fileUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
     });
-    
-    console.log(`Response status: ${response.status} ${response.statusText}`);
-    console.log(`Response headers:`, Object.fromEntries(response.headers.entries()));
-    
+
     if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch file: ${response.status} ${response.statusText}`
+      );
     }
 
     const arrayBuffer = await response.arrayBuffer();
     const data = Buffer.from(arrayBuffer);
     const mediaType = getMediaTypeFromFileName(fileName);
-    
-    console.log(`File size: ${data.length} bytes, Media type: ${mediaType}`);
 
     // Extract text from PDFs
     if (mediaType === "application/pdf") {
       try {
-        console.log("Attempting to parse PDF...");
         const pdfData = await pdf(data);
-        console.log(`PDF parsed successfully, text length: ${pdfData.text.length}`);
-        return {
-          type: "text",
-          text: pdfData.text,
-        };
+        const extracted = pdfData.text.trim();
+
+        if (extracted.length > 0) {
+          return {
+            type: "text",
+            text: extracted,
+          };
+        } else {
+          return {
+            type: "text",
+            text: "[PDF has no extractable text. It might be scanned or image-based.]",
+          };
+        }
       } catch (pdfError) {
         console.error("PDF parsing error:", pdfError);
-        // Fallback to file if PDF parsing fails
         return {
-          type: "file",
-          data,
-          mediaType,
+          type: "text",
+          text: "[Error parsing PDF file]",
         };
       }
     }

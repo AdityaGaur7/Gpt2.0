@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Copy, Edit2, Trash2, Check, X } from "lucide-react";
+import { Copy, Edit2, Trash2, Check, X, RotateCcw } from "lucide-react";
 import Image from "next/image";
 
 export type Message = {
@@ -12,15 +12,22 @@ export type Message = {
   role: "user" | "assistant" | "assistant-draft";
   content: string;
   files?: { name: string; url: string; type: string }[];
+  isLoading?: boolean;
 };
 
 type Props = {
   message: Message;
   onDelete: (id: string) => void;
   onEdit: (id: string, content: string) => void;
+  onRegenerate?: (id: string) => void;
 };
 
-export default function MessageBubble({ message, onDelete, onEdit }: Props) {
+export default function MessageBubble({
+  message,
+  onDelete,
+  onEdit,
+  onRegenerate,
+}: Props) {
   const [hovered, setHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -88,7 +95,24 @@ export default function MessageBubble({ message, onDelete, onEdit }: Props) {
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="whitespace-pre-wrap text-pretty">{message.content}</p>
+            <div className="flex items-center gap-2">
+              <p className="whitespace-pre-wrap text-pretty">
+                {message.content}
+              </p>
+              {message.isLoading && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <div className="w-2 h-2 bg-current rounded-full animate-pulse"></div>
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-pulse"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-pulse"
+                    style={{ animationDelay: "0.4s" }}
+                  ></div>
+                </div>
+              )}
+            </div>
             {message.files && message.files.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {message.files.map((file, index) => (
@@ -144,6 +168,17 @@ export default function MessageBubble({ message, onDelete, onEdit }: Props) {
                 onClick={() => setIsEditing(true)}
               >
                 <Edit2 className="h-4 w-4" />
+              </Button>
+            )}
+            {message.role === "assistant" && onRegenerate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="Regenerate response"
+                onClick={() => onRegenerate(message.id)}
+              >
+                <RotateCcw className="h-4 w-4" />
               </Button>
             )}
             <Button

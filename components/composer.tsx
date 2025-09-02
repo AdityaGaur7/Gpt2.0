@@ -18,11 +18,19 @@ export type ComposerFile = {
 type Props = {
   onSend: (text: string, files: ComposerFile[]) => void;
   disabled?: boolean;
+  onUploadStart?: () => void;
+  onUploadEnd?: () => void;
 };
 
-export default function Composer({ onSend, disabled = false }: Props) {
+export default function Composer({
+  onSend,
+  disabled = false,
+  onUploadStart,
+  onUploadEnd,
+}: Props) {
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<ComposerFile[]>([]);
+
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
@@ -52,6 +60,7 @@ export default function Composer({ onSend, disabled = false }: Props) {
     const list = e.target.files;
     if (!list) return;
 
+    onUploadStart?.();
     const newFiles: ComposerFile[] = [];
 
     for (const file of Array.from(list)) {
@@ -109,6 +118,7 @@ export default function Composer({ onSend, disabled = false }: Props) {
 
     setFiles((prev) => [...prev, ...newFiles]);
     if (fileInput.current) fileInput.current.value = "";
+    onUploadEnd?.();
   }
 
   return (
