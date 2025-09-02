@@ -35,7 +35,7 @@ export default async function handler(
   const db = await getDb();
 
   try {
-    // 1) Fetch mem0 entries for user and prepend system context
+    // 1) Fetch memories from MongoDB
     const mems = await db
       .collection("memories")
       .find({
@@ -141,12 +141,56 @@ export default async function handler(
     if (aiStream) {
       try {
         // Handle Vercel AI text stream
+        let fullResponse = "";
         for await (const chunk of aiStream) {
           if (typeof chunk === "string" && chunk.trim()) {
+            fullResponse += chunk;
             res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
           }
         }
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+
+        // Store conversation in MongoDB after successful response
+        try {
+          // Get the last user message and AI response for memory storage
+          const lastUserMessage = incomingMessages[incomingMessages.length - 1];
+          if (lastUserMessage && lastUserMessage.role === "user") {
+            // Store the conversation as a memory
+            await db.collection("memories").insertOne({
+              userId: clerkUserId,
+              key: `conversation_${Date.now()}`,
+              value: `User: ${lastUserMessage.content}\nAssistant: ${fullResponse}`,
+              createdAt: new Date(),
+              type: "conversation",
+            });
+
+            // Update conversation title if this is the first message
+            if (incomingMessages.length === 1) {
+              const conversationTitle =
+                lastUserMessage.content.slice(0, 50) +
+                (lastUserMessage.content.length > 50 ? "…" : "");
+
+              // Find the most recent conversation for this user and update its title
+              const recentConversation = await db
+                .collection("conversations")
+                .findOne({ userId: clerkUserId }, { sort: { createdAt: -1 } });
+
+              if (recentConversation) {
+                await db
+                  .collection("conversations")
+                  .updateOne(
+                    { _id: recentConversation._id },
+                    {
+                      $set: { title: conversationTitle, updatedAt: new Date() },
+                    }
+                  );
+              }
+            }
+          }
+        } catch (memoryError) {
+          console.error("Memory storage error:", memoryError);
+          // Don't fail the request if memory storage fails
+        }
       } catch (streamError) {
         console.error("Stream error:", streamError);
         res.write(

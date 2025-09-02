@@ -8,16 +8,18 @@ import { Menu, Plus, LogOut, Sun, Trash2 } from "lucide-react";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
-  const [chats, setChats] = useState<{ id: string; title: string }[]>([]);
+  const [conversations, setConversations] = useState<
+    { _id: string; title: string; updatedAt: Date }[]
+  >([]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch("/api/chat-history", { method: "GET" });
+        const res = await fetch("/api/conversations", { method: "GET" });
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled) setChats(data.items || []);
+        if (!cancelled) setConversations(data || []);
       } catch {
         // ignore
       }
@@ -32,6 +34,14 @@ export default function Sidebar() {
       window.removeEventListener("refresh-history", onRefresh as EventListener);
     };
   }, []);
+
+  function selectConversation(conversationId: string) {
+    window.dispatchEvent(
+      new CustomEvent("conversation-select", {
+        detail: { conversationId },
+      })
+    );
+  }
 
   return (
     <>
@@ -53,17 +63,23 @@ export default function Sidebar() {
 
         <div className="flex-1 overflow-y-auto">
           <nav aria-label="Chat history" className="px-2 py-3 space-y-1">
-            {chats.map((c) => (
+            {conversations.map((conversation) => (
               <button
-                key={c.id}
+                key={conversation._id}
                 className={cn(
-                  "w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted"
+                  "w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted truncate"
                 )}
-                aria-label={`Open ${c.title}`}
+                aria-label={`Open ${conversation.title}`}
+                onClick={() => selectConversation(conversation._id)}
               >
-                {c.title}
+                {conversation.title}
               </button>
             ))}
+            {conversations.length === 0 && (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                No conversations yet
+              </div>
+            )}
           </nav>
         </div>
 
@@ -154,16 +170,24 @@ export default function Sidebar() {
                   aria-label="Chat history mobile"
                   className="px-2 py-3 space-y-1"
                 >
-                  {chats.map((c) => (
+                  {conversations.map((conversation) => (
                     <button
-                      key={c.id}
-                      className="w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted"
-                      aria-label={`Open ${c.title}`}
-                      onClick={() => setOpen(false)}
+                      key={conversation._id}
+                      className="w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted truncate"
+                      aria-label={`Open ${conversation.title}`}
+                      onClick={() => {
+                        setOpen(false);
+                        selectConversation(conversation._id);
+                      }}
                     >
-                      {c.title}
+                      {conversation.title}
                     </button>
                   ))}
+                  {conversations.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      No conversations yet
+                    </div>
+                  )}
                 </nav>
               </div>
               <div className="mt-auto border-t p-3">

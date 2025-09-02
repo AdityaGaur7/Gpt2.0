@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
 import MessageBubble, { type Message } from "./message-bubble";
 import Composer, { type ComposerFile } from "./composer";
@@ -10,21 +10,99 @@ export default function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(null);
 
   const assistantDraftRef = useRef<string>("");
   const draftIdRef = useRef<string>("");
   const canScrollId = useMemo(() => crypto.randomUUID(), []);
   const { user, isLoaded } = useUser();
 
+  const loadConversations = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const response = await fetch("/api/conversations");
+      if (response.ok) {
+        // Trigger sidebar refresh
+        window.dispatchEvent(new CustomEvent("refresh-history"));
+      }
+    } catch (error) {
+      console.error("Failed to load conversations:", error);
+    }
+  }, [user]);
+
+  const loadConversationMessages = useCallback(
+    async (conversationId: string) => {
+      if (!user) return;
+
+      try {
+        const response = await fetch(
+          `/api/messages?conversationId=${conversationId}`
+        );
+        if (response.ok) {
+          const messages = await response.json();
+          setMessages(
+            messages.map(
+              (msg: {
+                _id: string;
+                role: string;
+                content: string;
+                files?: { name: string; url: string; type: string }[];
+              }) => ({
+                id: msg._id,
+                role: msg.role,
+                content: msg.content,
+                files: msg.files,
+              })
+            )
+          );
+          setCurrentConversationId(conversationId);
+        }
+      } catch (error) {
+        console.error("Failed to load conversation messages:", error);
+      }
+    },
+    [user]
+  );
+
+  // Load conversations on component mount
+  useEffect(() => {
+    if (user) {
+      loadConversations();
+    }
+  }, [user, loadConversations]);
+
   // Listen for "new-chat" events to reset conversation
   useEffect(() => {
     function onNewChat() {
       setMessages([]);
+      setCurrentConversationId(null);
     }
     window.addEventListener("new-chat", onNewChat as EventListener);
     return () =>
       window.removeEventListener("new-chat", onNewChat as EventListener);
   }, []);
+
+  // Listen for conversation selection events
+  useEffect(() => {
+    function onConversationSelect(event: CustomEvent) {
+      const conversationId = event.detail.conversationId;
+      if (conversationId) {
+        loadConversationMessages(conversationId);
+      }
+    }
+    window.addEventListener(
+      "conversation-select",
+      onConversationSelect as EventListener
+    );
+    return () =>
+      window.removeEventListener(
+        "conversation-select",
+        onConversationSelect as EventListener
+      );
+  }, [loadConversationMessages]);
 
   async function addMessage(text: string, files: ComposerFile[]) {
     // Check if user is authenticated
@@ -47,7 +125,37 @@ export default function ChatContainer() {
           : undefined,
     };
     setMessages((prev) => [...prev, userMsg]);
-    // Fire-and-forget: record in Mem0 history if available
+
+    // Store user message in MongoDB
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: currentConversationId,
+          role: "user",
+          content: text,
+          files: files.map((f) => ({
+            name: f.name,
+            url: f.url || "",
+            type: f.type || "unknown",
+          })),
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (!currentConversationId && result.conversationId) {
+          setCurrentConversationId(result.conversationId);
+          // Reload conversations to show the new one
+          loadConversations();
+        }
+      }
+    } catch (error) {
+      console.error("Failed to store user message:", error);
+    }
+
+    // Fire-and-forget: record in chat history
     try {
       fetch("/api/chat-history", {
         method: "POST",
@@ -170,6 +278,25 @@ export default function ChatContainer() {
           },
         ];
       });
+
+      // Store AI response in MongoDB
+      try {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId: currentConversationId,
+            role: "assistant",
+            content: assistantDraftRef.current,
+          }),
+        });
+
+        // Refresh conversations to update titles
+        loadConversations();
+      } catch (error) {
+        console.error("Failed to store AI response:", error);
+      }
+
       assistantDraftRef.current = "";
       draftIdRef.current = "";
     }
@@ -449,9 +576,6 @@ export default function ChatContainer() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
             <h2 className="text-xl font-semibold">Please sign in to chat</h2>
-            <p className="text-muted-foreground">
-              You need to be authenticated to use the chat feature.
-            </p>
           </div>
         </div>
       </div>
@@ -486,7 +610,7 @@ export default function ChatContainer() {
           ))}
 
           {/* Scroll anchor */}
-          <div id={canScrollId} />
+          <div id={canScrollId} className="sr-only" />
         </div>
       </div>
 
