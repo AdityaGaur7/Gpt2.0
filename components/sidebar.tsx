@@ -11,6 +11,9 @@ export default function Sidebar() {
   const [conversations, setConversations] = useState<
     { _id: string; title: string; updatedAt: Date }[]
   >([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,19 +31,61 @@ export default function Sidebar() {
     function onRefresh() {
       load();
     }
+    function onConversationSelected(event: CustomEvent) {
+      setSelectedConversationId(event.detail.conversationId);
+    }
     window.addEventListener("refresh-history", onRefresh as EventListener);
+    window.addEventListener(
+      "conversation-selected",
+      onConversationSelected as EventListener
+    );
     return () => {
       cancelled = true;
       window.removeEventListener("refresh-history", onRefresh as EventListener);
+      window.removeEventListener(
+        "conversation-selected",
+        onConversationSelected as EventListener
+      );
     };
   }, []);
 
   function selectConversation(conversationId: string) {
+    setSelectedConversationId(conversationId);
     window.dispatchEvent(
       new CustomEvent("conversation-select", {
         detail: { conversationId },
       })
     );
+  }
+
+  function createNewChat() {
+    setSelectedConversationId(null);
+    window.dispatchEvent(new CustomEvent("new-chat"));
+  }
+
+  async function deleteConversation(conversationId: string) {
+    try {
+      const response = await fetch("/api/conversations", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: conversationId }),
+      });
+
+      if (response.ok) {
+        // Remove from local state
+        setConversations((prev) =>
+          prev.filter((c) => c._id !== conversationId)
+        );
+
+        // If this was the selected conversation, clear selection
+        if (selectedConversationId === conversationId) {
+          setSelectedConversationId(null);
+          window.dispatchEvent(new CustomEvent("new-chat"));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+    }
   }
 
   return (
@@ -52,9 +97,7 @@ export default function Sidebar() {
             variant="default"
             className="w-full justify-start gap-2"
             aria-label="New chat"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("new-chat"));
-            }}
+            onClick={createNewChat}
           >
             <Plus className="h-4 w-4" />
             New chat
@@ -67,7 +110,8 @@ export default function Sidebar() {
               <button
                 key={conversation._id}
                 className={cn(
-                  "w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted truncate"
+                  "w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted truncate",
+                  selectedConversationId === conversation._id && "bg-muted"
                 )}
                 aria-label={`Open ${conversation.title}`}
                 onClick={() => selectConversation(conversation._id)}
@@ -133,7 +177,7 @@ export default function Sidebar() {
                 aria-label="New chat mobile"
                 onClick={() => {
                   setOpen(false);
-                  window.dispatchEvent(new CustomEvent("new-chat"));
+                  createNewChat();
                 }}
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -160,6 +204,7 @@ export default function Sidebar() {
                   variant="default"
                   className="w-full justify-start gap-2"
                   aria-label="New chat"
+                  onClick={createNewChat}
                 >
                   <Plus className="h-4 w-4" />
                   New chat
@@ -173,7 +218,11 @@ export default function Sidebar() {
                   {conversations.map((conversation) => (
                     <button
                       key={conversation._id}
-                      className="w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted truncate"
+                      className={cn(
+                        "w-full text-left rounded-md px-3 py-2 text-sm hover:bg-muted truncate",
+                        selectedConversationId === conversation._id &&
+                          "bg-muted"
+                      )}
                       aria-label={`Open ${conversation.title}`}
                       onClick={() => {
                         setOpen(false);

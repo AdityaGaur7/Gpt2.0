@@ -130,6 +130,8 @@ export default async function handler(
       model,
     });
 
+    console.log("AI stream obtained:", !!aiStream);
+
     // Set up SSE headers
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -141,56 +143,19 @@ export default async function handler(
     if (aiStream) {
       try {
         // Handle Vercel AI text stream
-        let fullResponse = "";
+        let chunkCount = 0;
         for await (const chunk of aiStream) {
           if (typeof chunk === "string" && chunk.trim()) {
-            fullResponse += chunk;
+            chunkCount++;
+            console.log(
+              `Sending chunk ${chunkCount}:`,
+              chunk.substring(0, 50) + "..."
+            );
             res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
           }
         }
+        console.log(`Stream completed, sent ${chunkCount} chunks`);
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-
-        // Store conversation in MongoDB after successful response
-        try {
-          // Get the last user message and AI response for memory storage
-          const lastUserMessage = incomingMessages[incomingMessages.length - 1];
-          if (lastUserMessage && lastUserMessage.role === "user") {
-            // Store the conversation as a memory
-            await db.collection("memories").insertOne({
-              userId: clerkUserId,
-              key: `conversation_${Date.now()}`,
-              value: `User: ${lastUserMessage.content}\nAssistant: ${fullResponse}`,
-              createdAt: new Date(),
-              type: "conversation",
-            });
-
-            // Update conversation title if this is the first message
-            if (incomingMessages.length === 1) {
-              const conversationTitle =
-                lastUserMessage.content.slice(0, 50) +
-                (lastUserMessage.content.length > 50 ? "…" : "");
-
-              // Find the most recent conversation for this user and update its title
-              const recentConversation = await db
-                .collection("conversations")
-                .findOne({ userId: clerkUserId }, { sort: { createdAt: -1 } });
-
-              if (recentConversation) {
-                await db
-                  .collection("conversations")
-                  .updateOne(
-                    { _id: recentConversation._id },
-                    {
-                      $set: { title: conversationTitle, updatedAt: new Date() },
-                    }
-                  );
-              }
-            }
-          }
-        } catch (memoryError) {
-          console.error("Memory storage error:", memoryError);
-          // Don't fail the request if memory storage fails
-        }
       } catch (streamError) {
         console.error("Stream error:", streamError);
         res.write(
@@ -198,6 +163,7 @@ export default async function handler(
         );
       }
     } else {
+      console.error("No AI stream available");
       res.write(
         `data: ${JSON.stringify({ error: "No stream available" })}\n\n`
       );

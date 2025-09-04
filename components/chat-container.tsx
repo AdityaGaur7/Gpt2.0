@@ -13,10 +13,14 @@ export default function ChatContainer() {
   const [currentConversationId, setCurrentConversationId] = useState<
     string | null
   >(null);
+  const canScrollId = useMemo(() => crypto.randomUUID(), []);
+  useEffect(() => {
+    const el = document.getElementById(canScrollId);
+    el?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, canScrollId]);
 
   const assistantDraftRef = useRef<string>("");
   const draftIdRef = useRef<string>("");
-  const canScrollId = useMemo(() => crypto.randomUUID(), []);
   const { user, isLoaded } = useUser();
 
   const loadConversations = useCallback(async () => {
@@ -79,6 +83,9 @@ export default function ChatContainer() {
     function onNewChat() {
       setMessages([]);
       setCurrentConversationId(null);
+      // Clear any streaming state
+      setIsStreaming(false);
+      setIsUploading(false);
     }
     window.addEventListener("new-chat", onNewChat as EventListener);
     return () =>
@@ -91,6 +98,12 @@ export default function ChatContainer() {
       const conversationId = event.detail.conversationId;
       if (conversationId) {
         loadConversationMessages(conversationId);
+        // Update sidebar selection state
+        window.dispatchEvent(
+          new CustomEvent("conversation-selected", {
+            detail: { conversationId },
+          })
+        );
       }
     }
     window.addEventListener(
@@ -190,7 +203,7 @@ export default function ChatContainer() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.id, // Use Clerk user ID instead of hardcoded demo ID
-          messages: [...messages, userMsg],
+          messages: [...messages.filter((m) => !m.isLoading), userMsg],
           model: "gemini-2.0-flash",
         }),
       });
@@ -268,12 +281,15 @@ export default function ChatContainer() {
       // Replace draft with final message
       setMessages((m) => {
         const withoutDraft = m.filter((x) => x.id !== draftIdRef.current);
+        console.log("assistantDraftRef.current", assistantDraftRef.current);
         return [
           ...withoutDraft,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: assistantDraftRef.current,
+            content:
+              assistantDraftRef.current ||
+              "I'm sorry, I couldn't generate a response. Please try again.",
             isLoading: false,
           },
         ];
@@ -281,18 +297,18 @@ export default function ChatContainer() {
 
       // Store AI response in MongoDB
       try {
-        await fetch("/api/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversationId: currentConversationId,
-            role: "assistant",
-            content: assistantDraftRef.current,
-          }),
-        });
-
-        // Refresh conversations to update titles
-        loadConversations();
+        // Only store AI response if it has content
+        if (assistantDraftRef.current && assistantDraftRef.current.trim()) {
+          await fetch("/api/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              conversationId: currentConversationId,
+              role: "assistant",
+              content: assistantDraftRef.current,
+            }),
+          });
+        }
       } catch (error) {
         console.error("Failed to store AI response:", error);
       }
@@ -590,7 +606,10 @@ export default function ChatContainer() {
       </div>
 
       <div className="flex-1">
-        <div className="mx-auto w-full max-w-3xl px-3 pb-28 pt-6 space-y-4 overflow-hidden">
+        <div
+          className="mx-auto w-full max-w-3xl px-3 pb-28 pt-6 space-y-4 
+            h-[70vh] overflow-y-auto"
+        >
           {messages.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <h2 className="text-xl font-semibold mb-2">

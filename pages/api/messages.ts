@@ -53,7 +53,7 @@ export default async function handler(
     try {
       const { conversationId, role, content, files } = req.body;
 
-      if (!role || !content) {
+      if (!role || !content || content.trim() === "") {
         res.status(400).json({ error: "Missing required fields" });
         return;
       }
@@ -61,11 +61,21 @@ export default async function handler(
       // Create or update conversation
       let finalConversationId = conversationId;
       if (!finalConversationId) {
+        // Generate a better title for the conversation
+        let title = content.slice(0, 50);
+        if (content.length > 50) {
+          title += "…";
+        }
+        // If the content is very short or empty, use a default title
+        if (!title.trim()) {
+          title = "New Chat";
+        }
+
         const conversationResult = await db
           .collection("conversations")
           .insertOne({
             userId,
-            title: content.slice(0, 50) + (content.length > 50 ? "…" : ""),
+            title,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -78,6 +88,32 @@ export default async function handler(
             { _id: new ObjectId(finalConversationId), userId },
             { $set: { updatedAt: new Date() } }
           );
+
+        // If this is the first message in the conversation, update the title
+        if (role === "user") {
+          const messageCount = await db.collection("messages").countDocuments({
+            conversationId: finalConversationId,
+            userId,
+          });
+
+          if (messageCount === 0) {
+            // This is the first message, update the conversation title
+            let title = content.slice(0, 50);
+            if (content.length > 50) {
+              title += "…";
+            }
+            if (!title.trim()) {
+              title = "New Chat";
+            }
+
+            await db
+              .collection("conversations")
+              .updateOne(
+                { _id: new ObjectId(finalConversationId), userId },
+                { $set: { title, updatedAt: new Date() } }
+              );
+          }
+        }
       }
 
       // Store the message
