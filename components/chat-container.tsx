@@ -212,51 +212,55 @@ export default function ChatContainer() {
         throw new Error(`API error: ${resp.status}`);
       }
 
-      // Handle SSE streaming
+      // Handle SSE streaming with buffering to avoid JSON split errors
       const reader = resp.body!.getReader();
       const decoder = new TextDecoder();
       let done = false;
       let draft = "";
+      let sseBuffer = "";
 
       while (!done) {
         const { value, done: streamDone } = await reader.read();
         done = streamDone;
 
         if (value) {
-          const chunk = decoder.decode(value);
-          // Parse SSE format: data: {"chunk":"..."}
+          sseBuffer += decoder.decode(value, { stream: true });
           try {
-            const lines = chunk.split("\n");
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6); // remove "data: "
-                if (data.trim()) {
-                  const payload = JSON.parse(data);
-                  if (payload.chunk) {
-                    draft += payload.chunk;
-                    assistantDraftRef.current = draft;
-                    setMessages((m) => {
-                      const withoutDraft = m.filter(
-                        (x) => x.id !== draftIdRef.current
-                      );
-                      return [
-                        ...withoutDraft,
-                        {
-                          id: draftIdRef.current,
-                          role: "assistant",
-                          content: draft,
-                          isLoading: false,
-                        },
-                      ];
-                    });
-                  } else if (payload.error) {
-                    console.error("Stream error:", payload.error);
-                    throw new Error(payload.error);
-                  } else if (payload.done) {
-                    // Stream completed successfully
-                    break;
-                  }
-                }
+            const events = sseBuffer.split("\n\n");
+            sseBuffer = events.pop() || "";
+            for (const event of events) {
+              const dataLines = event
+                .split("\n")
+                .filter((line) => line.startsWith("data: "))
+                .map((line) => line.slice(6))
+                .join("");
+
+              const trimmed = dataLines.trim();
+              if (!trimmed) continue;
+
+              const payload = JSON.parse(trimmed);
+              if (payload.chunk) {
+                draft += payload.chunk;
+                assistantDraftRef.current = draft;
+                setMessages((m) => {
+                  const withoutDraft = m.filter(
+                    (x) => x.id !== draftIdRef.current
+                  );
+                  return [
+                    ...withoutDraft,
+                    {
+                      id: draftIdRef.current,
+                      role: "assistant",
+                      content: draft,
+                      isLoading: false,
+                    },
+                  ];
+                });
+              } else if (payload.error) {
+                console.error("Stream error:", payload.error);
+                throw new Error(payload.error);
+              } else if (payload.done) {
+                // done marker; allow loop to finish
               }
             }
           } catch (e) {
@@ -265,6 +269,9 @@ export default function ChatContainer() {
           }
         }
       }
+      // Flush any remaining buffered bytes
+      const remaining = decoder.decode();
+      if (remaining) sseBuffer += remaining;
     } catch (error) {
       console.error("Chat error:", error);
       // Add error message
@@ -599,17 +606,14 @@ export default function ChatContainer() {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Mobile-only inline sidebar as a guard if someone lands directly here on small screens */}
       <div className="md:hidden sr-only">
         <Sidebar />
       </div>
 
-      <div className="flex-1">
-        <div
-          className="mx-auto w-full max-w-3xl px-3 pb-28 pt-6 space-y-4 
-            h-[70vh] overflow-y-auto"
-        >
+      <div className="flex-1 min-h-0">
+        <div className="mx-auto w-full max-w-3xl px-3 pb-28 pt-6 space-y-4 overflow-y-auto h-full">
           {messages.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <h2 className="text-xl font-semibold mb-2">

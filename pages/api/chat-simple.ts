@@ -2,12 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getAuth } from "@clerk/nextjs/server";
 import { getDb } from "../../lib/db";
 import { streamChatResponse, type ChatMessage } from "../../lib/vercelAI";
-import {
-  processFileFromUrlAsText,
-  createFileContent,
-  createTextContent,
-  validateFileSize,
-} from "../../lib/fileProcessor";
+import { processFileFromUrlAsText } from "../../lib/fileProcessor";
 
 export default async function handler(
   req: NextApiRequest,
@@ -59,8 +54,7 @@ export default async function handler(
       const files = m.files || [];
 
       if (files.length > 0) {
-        // Handle messages with files
-        const contentArray = [];
+        // Handle messages with files by combining extracted text into a single string
         let combinedText = messageContent.trim();
 
         // Process and add files
@@ -84,21 +78,9 @@ export default async function handler(
                   combinedText = `Content from ${file.name}:\n${processedFile.text}`;
                 }
               } else {
-                // Other files (images, etc.) - add as file content
-                const fileData = {
-                  name: file.name,
-                  data: processedFile.data,
-                  mediaType: processedFile.mediaType,
-                  size: processedFile.data.length,
-                };
-
-                // Validate file size (max 20MB for Gemini)
-                if (!validateFileSize(fileData, 20)) {
-                  console.warn(`File ${file.name} is too large, skipping`);
-                  continue;
-                }
-
-                contentArray.push(createFileContent(fileData));
+                // Non-text files: for now, skip sending as binary to satisfy SDK schema
+                // You can extend this later with an SDK-supported format for images/audio.
+                console.warn(`Skipping non-text file in prompt: ${file.name}`);
               }
             } catch (error) {
               console.error(`Error processing file ${file.name}:`, error);
@@ -113,11 +95,7 @@ export default async function handler(
             "Final combined text being sent to Gemini:",
             combinedText.substring(0, 300) + "..."
           );
-          contentArray.push(createTextContent(combinedText));
-        }
-
-        if (contentArray.length > 0) {
-          messages.push({ role: m.role, content: contentArray });
+          messages.push({ role: m.role, content: combinedText });
         }
       } else {
         // Handle text-only messages
@@ -132,12 +110,15 @@ export default async function handler(
 
     console.log("AI stream obtained:", !!aiStream);
 
-    // Set up SSE headers
+    // Set up SSE headers and disable buffering
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       Connection: "keep-alive",
-      "Cache-Control": "no-transform, no-cache, must-revalidate",
+      "Cache-Control": "no-cache, no-transform, must-revalidate",
+      "X-Accel-Buffering": "no",
     });
+    // Send initial comment to open the stream
+    res.write(":ok\n\n");
 
     // Read from aiStream and forward chunks
     if (aiStream) {
@@ -157,10 +138,12 @@ export default async function handler(
         console.log(`Stream completed, sent ${chunkCount} chunks`);
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       } catch (streamError) {
+        const msg =
+          streamError instanceof Error
+            ? streamError.message
+            : "Stream error occurred";
         console.error("Stream error:", streamError);
-        res.write(
-          `data: ${JSON.stringify({ error: "Stream error occurred" })}\n\n`
-        );
+        res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
       }
     } else {
       console.error("No AI stream available");

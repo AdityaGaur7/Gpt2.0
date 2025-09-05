@@ -91,7 +91,7 @@ export default function Sidebar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <div className="h-dvh flex flex-col">
+      <div className="h-full min-h-0 flex flex-col overflow-hidden">
         <div className="p-3 border-b flex items-center gap-2">
           <Button
             variant="default"
@@ -104,8 +104,11 @@ export default function Sidebar() {
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <nav aria-label="Chat history" className="px-2 py-3 space-y-1">
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <nav
+            aria-label="Chat history"
+            className="px-2 py-3 space-y-1 min-w-0"
+          >
             {conversations.map((conversation) => (
               <button
                 key={conversation._id}
@@ -196,7 +199,7 @@ export default function Sidebar() {
           >
             <div className="absolute inset-0 bg-black/40" />
             <div
-              className="absolute inset-y-0 left-0 w-[85%] max-w-xs bg-background border-r shadow-xl flex flex-col"
+              className="absolute inset-y-0 left-0 w-[85%] max-w-xs bg-background border-r shadow-xl flex flex-col min-h-0 overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-3 border-b flex items-center gap-2">
@@ -210,10 +213,10 @@ export default function Sidebar() {
                   New chat
                 </Button>
               </div>
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-h-0">
                 <nav
                   aria-label="Chat history mobile"
-                  className="px-2 py-3 space-y-1"
+                  className="px-2 py-3 space-y-1 min-w-0"
                 >
                   {conversations.map((conversation) => (
                     <button

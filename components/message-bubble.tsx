@@ -96,7 +96,7 @@ export default function MessageBubble({
         ) : (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <p className="whitespace-pre-wrap text-pretty">
+              <p className="whitespace-pre-wrap break-words break-anywhere text-pretty">
                 {message.content}
               </p>
               {message.isLoading && (

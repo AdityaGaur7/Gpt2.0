@@ -37,7 +37,7 @@ export async function streamChatResponse({
   }
 
   try {
-    // Build mixed content (text + file) parts per message
+    // Build simple text-only messages; join any arrays into a single string
     const formattedMessages: ModelMessage[] = messages
       .map((msg) => {
         const role =
@@ -52,28 +52,20 @@ export async function streamChatResponse({
           if (!text) return null;
           return {
             role,
-            content: [{ type: "text", text }],
+            content: text,
           } as unknown as ModelMessage;
         }
 
         if (Array.isArray(msg.content)) {
-          const parts: Array<
-            | { type: "text"; text: string }
-            | { type: "file"; data: Buffer; mediaType?: string }
-          > = [];
+          const textParts: string[] = [];
           for (const part of msg.content) {
             if (part.type === "text" && part.text && part.text.trim()) {
-              parts.push({ type: "text", text: part.text });
-            } else if (part.type === "file" && part.data) {
-              parts.push({
-                type: "file",
-                data: part.data,
-                mediaType: part.mediaType,
-              });
+              textParts.push(part.text);
             }
           }
-          if (parts.length === 0) return null;
-          return { role, content: parts } as unknown as ModelMessage;
+          const text = textParts.join("\n\n").trim();
+          if (!text) return null;
+          return { role, content: text } as unknown as ModelMessage;
         }
 
         return null;
@@ -90,18 +82,63 @@ export async function streamChatResponse({
       JSON.stringify(formattedMessages, null, 2)
     );
 
-    const { textStream } = await streamText({
-      model: google(
-        model as
-          | "gemini-2.0-flash"
-          | "gemini-1.5-pro"
-          | "gemini-pro"
-          | "gemini-2.5-flash"
-      ),
-      messages: formattedMessages,
-    });
+    async function tryStream(selectedModel: Model) {
+      const { textStream } = await streamText({
+        model: google(
+          selectedModel as
+            | "gemini-2.0-flash"
+            | "gemini-1.5-pro"
+            | "gemini-pro"
+            | "gemini-2.5-flash"
+        ),
+        messages: formattedMessages,
+      });
+      return textStream;
+    }
 
-    return textStream;
+    try {
+      return await tryStream(model);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      const statusCode = (e as { statusCode?: number } | undefined)?.statusCode;
+      const isRateLimited =
+        statusCode === 429 ||
+        message.includes("Quota exceeded") ||
+        message.includes("RATE_LIMIT_EXCEEDED");
+
+      if (!isRateLimited) throw e;
+
+      // Fallback chain on rate limit
+      const fallbacks: Model[] = [
+        "gemini-2.5-flash",
+        "gemini-1.5-pro",
+        "gemini-pro",
+      ].filter((m) => m !== model);
+
+      for (const alt of fallbacks) {
+        try {
+          console.warn(
+            `Primary model '${model}' rate-limited. Falling back to '${alt}'.`
+          );
+          return await tryStream(alt);
+        } catch (innerErr: unknown) {
+          const innerMsg =
+            innerErr instanceof Error ? innerErr.message : String(innerErr);
+          const innerCode = (innerErr as { statusCode?: number } | undefined)
+            ?.statusCode;
+          const innerRate =
+            innerCode === 429 ||
+            innerMsg.includes("Quota exceeded") ||
+            innerMsg.includes("RATE_LIMIT_EXCEEDED");
+          if (!innerRate) throw innerErr;
+          // try next fallback
+        }
+      }
+
+      throw new Error(
+        "All fallback models are rate-limited. Please wait a minute or configure a model with available quota."
+      );
+    }
   } catch (error) {
     console.error("Google AI stream error:", error);
     throw new Error(
