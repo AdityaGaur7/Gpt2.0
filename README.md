@@ -2,6 +2,10 @@
 
 A pixel-perfect ChatGPT clone built with Next.js, TypeScript, Tailwind CSS, and ShadCN UI components.
 
+
+https://github.com/user-attachments/assets/ebd9d128-fe53-47ae-aff4-20817c39f8d6
+
+
 ## Features
 
 - **Real-time Streaming**: Live AI responses with streaming from Vercel AI SDK
