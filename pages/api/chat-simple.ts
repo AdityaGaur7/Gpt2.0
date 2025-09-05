@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getAuth } from "@clerk/nextjs/server";
 import { getDb } from "../../lib/db";
 import { streamChatResponse, type ChatMessage } from "../../lib/vercelAI";
-import { processFileFromUrlAsText } from "../../lib/fileProcessor";
+import { processFileForAI } from "../../lib/fileProcessor";
 
 export default async function handler(
   req: NextApiRequest,
@@ -54,48 +54,53 @@ export default async function handler(
       const files = m.files || [];
 
       if (files.length > 0) {
-        // Handle messages with files by combining extracted text into a single string
-        let combinedText = messageContent.trim();
+        // Handle messages with files using proper AI SDK format
+        const contentParts: Array<{
+          type: "text" | "file";
+          text?: string;
+          data?: Buffer;
+          mediaType?: string;
+        }> = [];
+
+        // Add text content if present
+        if (messageContent.trim()) {
+          contentParts.push({
+            type: "text",
+            text: messageContent.trim(),
+          });
+        }
 
         // Process and add files
         for (const file of files) {
           if (file.url) {
             try {
-              const processedFile = await processFileFromUrlAsText(
-                file.url,
-                file.name
+              const processedFile = await processFileForAI(file.url, file.name);
+
+              console.log(
+                `Processing file ${file.name} as ${processedFile.type}:`,
+                processedFile.type === "text"
+                  ? processedFile.text?.substring(0, 200) + "..."
+                  : `Binary data (${processedFile.mediaType})`
               );
 
-              if (processedFile.type === "text") {
-                // PDF converted to text - combine with user message
-                console.log(
-                  `PDF text extracted from ${file.name}:`,
-                  processedFile.text.substring(0, 200) + "..."
-                );
-                if (combinedText) {
-                  combinedText += `\n\n--- Content from ${file.name} ---\n${processedFile.text}`;
-                } else {
-                  combinedText = `Content from ${file.name}:\n${processedFile.text}`;
-                }
-              } else {
-                // Non-text files: for now, skip sending as binary to satisfy SDK schema
-                // You can extend this later with an SDK-supported format for images/audio.
-                console.warn(`Skipping non-text file in prompt: ${file.name}`);
-              }
+              contentParts.push(processedFile);
             } catch (error) {
               console.error(`Error processing file ${file.name}:`, error);
-              // Continue with other files
+              // Add error message as text
+              contentParts.push({
+                type: "text",
+                text: `[Error processing file ${file.name}]`,
+              });
             }
           }
         }
 
-        // Add combined text content if we have any
-        if (combinedText) {
-          console.log(
-            "Final combined text being sent to Gemini:",
-            combinedText.substring(0, 300) + "..."
-          );
-          messages.push({ role: m.role, content: combinedText });
+        // Add message with mixed content
+        if (contentParts.length > 0) {
+          messages.push({
+            role: m.role,
+            content: contentParts,
+          });
         }
       } else {
         // Handle text-only messages

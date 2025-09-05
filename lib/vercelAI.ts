@@ -20,6 +20,66 @@ export interface ChatMessage {
   content: string | MessageContent[];
 }
 
+export interface FileMessage {
+  role: "user";
+  content: Array<{
+    type: "text" | "file";
+    text?: string;
+    data?: Buffer;
+    mediaType?: string;
+  }>;
+}
+
+// Example function showing proper usage pattern
+export async function generateTextWithFiles({
+  messages,
+  model = "gemini-2.5-flash",
+}: {
+  messages: Array<{
+    role: "user" | "assistant" | "system";
+    content:
+      | string
+      | Array<{
+          type: "text" | "file";
+          text?: string;
+          data?: Buffer;
+          mediaType?: string;
+        }>;
+  }>;
+  model?: Model;
+}) {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey) {
+    throw new Error("No Google AI API key found");
+  }
+
+  // This would use generateText for non-streaming responses
+  // const result = await generateText({
+  //   model: google(model as any),
+  //   messages: messages as any,
+  // });
+  // return result.text;
+
+  // For now, we'll use streamText as it's more suitable for chat
+  const { textStream } = await streamText({
+    model: google(
+      model as
+        | "gemini-2.0-flash"
+        | "gemini-1.5-pro"
+        | "gemini-pro"
+        | "gemini-2.5-flash"
+    ),
+    messages: messages as ModelMessage[],
+  });
+
+  // Convert stream to text
+  let result = "";
+  for await (const chunk of textStream) {
+    result += chunk;
+  }
+  return result;
+}
+
 export async function streamChatResponse({
   messages,
   model = "gemini-2.0-flash",
@@ -37,7 +97,7 @@ export async function streamChatResponse({
   }
 
   try {
-    // Build simple text-only messages; join any arrays into a single string
+    // Build messages with proper file handling for AI SDK
     const formattedMessages: ModelMessage[] = messages
       .map((msg) => {
         const role =
@@ -57,15 +117,43 @@ export async function streamChatResponse({
         }
 
         if (Array.isArray(msg.content)) {
-          const textParts: string[] = [];
+          // Handle mixed content (text + files)
+          const contentParts: Array<{
+            type: "text" | "file";
+            text?: string;
+            data?: Buffer;
+            mediaType?: string;
+          }> = [];
+
           for (const part of msg.content) {
             if (part.type === "text" && part.text && part.text.trim()) {
-              textParts.push(part.text);
+              contentParts.push({
+                type: "text",
+                text: part.text,
+              });
+            } else if (part.type === "file" && part.data && part.mediaType) {
+              contentParts.push({
+                type: "file",
+                data: part.data,
+                mediaType: part.mediaType,
+              });
             }
           }
-          const text = textParts.join("\n\n").trim();
-          if (!text) return null;
-          return { role, content: text } as unknown as ModelMessage;
+
+          if (contentParts.length === 0) return null;
+
+          // If only text content, return as string
+          if (contentParts.every((part) => part.type === "text")) {
+            const text = contentParts
+              .filter((part) => part.type === "text")
+              .map((part) => part.text)
+              .join("\n\n")
+              .trim();
+            return { role, content: text } as unknown as ModelMessage;
+          }
+
+          // If mixed content, return as array
+          return { role, content: contentParts } as unknown as ModelMessage;
         }
 
         return null;

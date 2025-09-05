@@ -162,6 +162,87 @@ export async function processFileFromUrlAsText(
   }
 }
 
+// New function to process files for AI SDK format
+export async function processFileForAI(
+  fileUrl: string,
+  fileName: string
+): Promise<{
+  type: "text" | "file";
+  text?: string;
+  data?: Buffer;
+  mediaType?: string;
+}> {
+  try {
+    // Fetch file from URL with proper headers
+    const response = await fetch(fileUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch file: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const data = Buffer.from(arrayBuffer);
+    const mediaType = getMediaTypeFromFileName(fileName);
+
+    // For images and other files, return as file type for AI SDK
+    if (mediaType.startsWith("image/") || mediaType === "application/pdf") {
+      return {
+        type: "file",
+        data,
+        mediaType,
+      };
+    }
+
+    // For text files, extract content
+    if (mediaType === "text/plain") {
+      const text = data.toString("utf-8");
+      return {
+        type: "text",
+        text,
+      };
+    }
+
+    // For PDFs, try to extract text but also keep the file
+    if (mediaType === "application/pdf") {
+      try {
+        const pdfData = await pdf(data);
+        const extracted = pdfData.text.trim();
+
+        if (extracted.length > 0) {
+          // Return both text and file for PDFs
+          return {
+            type: "text",
+            text: `Content from ${fileName}:\n\n${extracted}`,
+          };
+        }
+      } catch (pdfError) {
+        console.error("PDF parsing error:", pdfError);
+      }
+    }
+
+    // Default: return as file
+    return {
+      type: "file",
+      data,
+      mediaType,
+    };
+  } catch (error) {
+    console.error("Error processing file for AI:", error);
+    throw new Error(
+      `Failed to process file: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
+
 export async function processFileFromPath(filePath: string): Promise<FileData> {
   try {
     const fileName = path.basename(filePath);

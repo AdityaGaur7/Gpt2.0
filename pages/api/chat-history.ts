@@ -18,19 +18,17 @@ export default async function handler(
 
   if (req.method === "GET") {
     try {
-      // Get recent chat history from MongoDB
-      const chatHistory = await db
-        .collection("chat_history")
+      // Return recent conversations as chat history
+      const conversations = await db
+        .collection("conversations")
         .find({ userId })
-        .sort({ createdAt: -1 })
+        .sort({ updatedAt: -1 })
         .limit(20)
         .toArray();
 
-      const items = chatHistory.map((chat) => ({
-        id: chat._id.toString(),
-        title:
-          chat.title ||
-          chat.message.slice(0, 28) + (chat.message.length > 28 ? "…" : ""),
+      const items = conversations.map((c) => ({
+        id: c._id.toString(),
+        title: (c.title && String(c.title).trim()) || "New Chat",
       }));
 
       res.json({ items });
@@ -49,12 +47,13 @@ export default async function handler(
       return;
     }
     try {
-      // Store chat history in MongoDB
-      const result = await db.collection("chat_history").insertOne({
+      // Create a new conversation from provided text (first user message)
+      const titleBase = text.slice(0, 50) + (text.length > 50 ? "…" : "");
+      const result = await db.collection("conversations").insertOne({
         userId,
-        message: text,
-        title: text.slice(0, 50) + (text.length > 50 ? "…" : ""),
+        title: titleBase.trim() || "New Chat",
         createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
       res.json({ ok: true, id: result.insertedId.toString() });

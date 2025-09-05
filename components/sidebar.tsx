@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Menu, Plus, LogOut, Sun, Trash2 } from "lucide-react";
+import { Menu, Plus, LogOut, Sun, Moon, Trash2 } from "lucide-react";
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
@@ -14,6 +15,13 @@ export default function Sidebar() {
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Handle theme mounting to prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +96,10 @@ export default function Sidebar() {
     }
   }
 
+  function toggleTheme() {
+    setTheme(theme === "dark" ? "light" : "dark");
+  }
+
   return (
     <>
       {/* Desktop sidebar */}
@@ -134,9 +146,27 @@ export default function Sidebar() {
           <div className="p-3 space-y-2">
             <Input placeholder="Search" aria-label="Search chats" />
             <div className="flex items-center justify-between">
-              <Button variant="ghost" size="sm" aria-label="Toggle light mode">
-                <Sun className="h-4 w-4 mr-2" />
-                Light mode
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Toggle theme"
+                onClick={toggleTheme}
+                disabled={!mounted}
+              >
+                {mounted ? (
+                  theme === "dark" ? (
+                    <Sun className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Moon className="h-4 w-4 mr-2" />
+                  )
+                ) : (
+                  <Sun className="h-4 w-4 mr-2" />
+                )}
+                {mounted
+                  ? theme === "dark"
+                    ? "Light mode"
+                    : "Dark mode"
+                  : "Theme"}
               </Button>
               <Button
                 variant="ghost"
@@ -242,7 +272,38 @@ export default function Sidebar() {
                   )}
                 </nav>
               </div>
-              <div className="mt-auto border-t p-3">
+              <div className="mt-auto border-t p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Toggle theme"
+                    onClick={toggleTheme}
+                    disabled={!mounted}
+                  >
+                    {mounted ? (
+                      theme === "dark" ? (
+                        <Sun className="h-4 w-4 mr-2" />
+                      ) : (
+                        <Moon className="h-4 w-4 mr-2" />
+                      )
+                    ) : (
+                      <Sun className="h-4 w-4 mr-2" />
+                    )}
+                    {mounted
+                      ? theme === "dark"
+                        ? "Light mode"
+                        : "Dark mode"
+                      : "Theme"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Delete conversations"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
