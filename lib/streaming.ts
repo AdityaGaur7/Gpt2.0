@@ -2,7 +2,7 @@
 
 export interface StreamEvent {
   type: "chunk" | "done" | "error" | "metadata" | "thinking";
-  data: any;
+  data: unknown;
   timestamp: number;
 }
 

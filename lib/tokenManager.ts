@@ -91,7 +91,7 @@ export function trimConversationToFit(
   const otherMessages = messages.filter((m) => m.role !== "system");
 
   // Always keep system message
-  let trimmedMessages = systemMessage ? [systemMessage] : [];
+  const trimmedMessages = systemMessage ? [systemMessage] : [];
   let currentTokens = systemMessage ? estimateTokens(systemMessage.content) : 0;
 
   // Add messages from the end (most recent) until we hit the limit

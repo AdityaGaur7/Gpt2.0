@@ -9,7 +9,7 @@ export async function getDb() {
   if (!cached.client) {
     const client = new MongoClient(uri);
     await client.connect();
-    (cached as any).client = client;
+    (cached as { client: MongoClient }).client = client;
   }
   return cached.client!.db(); // default DB from URI
 }

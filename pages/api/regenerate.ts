@@ -23,7 +23,7 @@ export default async function handler(
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { messages, model = "gemini-2.0-flash", messageId } = req.body;
+  const { messages, model = "gemini-2.0-flash" } = req.body;
 
   // Basic validation
   if (!Array.isArray(messages)) {
