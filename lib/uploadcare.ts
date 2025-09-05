@@ -1,4 +1,9 @@
-import { uploadFile } from "@uploadcare/upload-client";
+import {
+  ComputableProgressInfo,
+  UnknownProgressInfo,
+  ProgressCallback,
+  uploadFile,
+} from "@uploadcare/upload-client";
 
 export interface UploadcareConfig {
   publicKey: string;
@@ -32,7 +37,9 @@ export class UploadcareService {
       const result = await uploadFile(file, {
         publicKey: this.config.publicKey,
         fileName: options?.fileName,
-        onProgress: options?.onProgress,
+        onProgress: options?.onProgress as unknown as ProgressCallback<
+          ComputableProgressInfo | UnknownProgressInfo
+        >,
       });
 
       return {
@@ -40,7 +47,7 @@ export class UploadcareService {
         name: result.name || options?.fileName || "unknown",
         size: result.size,
         mimeType: result.mimeType || "application/octet-stream",
-        url: result.url,
+        url: result.cdnUrl,
         cdnUrl: result.cdnUrl,
       };
     } catch (error) {

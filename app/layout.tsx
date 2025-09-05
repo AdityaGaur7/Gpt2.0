@@ -22,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" style={{ colorScheme: "dark" }}>
-      <body className="antialiased overflow-x-hidden min-h-dvh">
+      <body className="antialiased overflow-x-hidden min-h-dvh vsc-initialized">
         <Providers>
           <header className="p-4 border-b overflow-hidden">
             <div className="max-w-7xl mx-auto flex justify-between items-center">
