@@ -40,30 +40,6 @@ export default async function handler(
     }
   }
 
-  if (req.method === "POST") {
-    const { text } = req.body || {};
-    if (!text || typeof text !== "string") {
-      res.status(400).json({ error: "Missing text" });
-      return;
-    }
-    try {
-      // Create a new conversation from provided text (first user message)
-      const titleBase = text.slice(0, 50) + (text.length > 50 ? "…" : "");
-      const result = await db.collection("conversations").insertOne({
-        userId,
-        title: titleBase.trim() || "New Chat",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      res.json({ ok: true, id: result.insertedId.toString() });
-      return;
-    } catch (e) {
-      console.error("chat-history POST error", e);
-      res.status(500).json({ error: "Failed to add history" });
-      return;
-    }
-  }
 
   res.status(405).end();
 }

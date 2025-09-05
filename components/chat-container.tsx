@@ -160,26 +160,15 @@ export default function ChatContainer() {
         const result = await response.json();
         if (!currentConversationId && result.conversationId) {
           setCurrentConversationId(result.conversationId);
-          // Reload conversations to show the new one
-          loadConversations();
+          // Trigger sidebar refresh to show the new conversation
+          window.dispatchEvent(new CustomEvent("refresh-history"));
         }
       }
     } catch (error) {
       console.error("Failed to store user message:", error);
     }
 
-    // Fire-and-forget: record in chat history
-    try {
-      fetch("/api/chat-history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      })
-        .then(() => {
-          window.dispatchEvent(new CustomEvent("refresh-history"));
-        })
-        .catch(() => {});
-    } catch {}
+    // No need to call chat-history API - conversations are created in messages API
 
     // Call API to stream response
     setIsStreaming(true);

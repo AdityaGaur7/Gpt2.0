@@ -33,12 +33,11 @@ export default async function handler(
   const db = await getDb();
 
   try {
-    // 1) Fetch mem0 entries for user and prepend system context
-    // Use Clerk user ID as string instead of MongoDB ObjectId
+   
     const mems = await db
       .collection("memories")
       .find({
-        userId: clerkUserId, // Use Clerk user ID directly
+        userId: clerkUserId, 
       })
       .toArray();
 
