@@ -1,17 +1,8 @@
-import { Geist, Geist_Mono } from "next/font/google";
+
 import "./globals.css";
 import Providers from "./providers";
 import HeaderClient from "../components/header-client";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 // metadata cannot be used in a Client Component layout
 
