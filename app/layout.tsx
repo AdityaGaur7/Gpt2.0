@@ -21,11 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-x-hidden min-h-dvh`}
-    >
-      <body className="vsc-initialized min-h-dvh">
+    <html lang="en" className="dark" style={{ colorScheme: "dark" }}>
+      <body className="antialiased overflow-x-hidden min-h-dvh">
         <Providers>
           <header className="p-4 border-b overflow-hidden">
             <div className="max-w-7xl mx-auto flex justify-between items-center">
