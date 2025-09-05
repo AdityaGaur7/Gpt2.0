@@ -1,6 +1,7 @@
 # ChatGPT Clone
 
 A pixel-perfect ChatGPT clone built with Next.js, TypeScript, Tailwind CSS, and ShadCN UI components.
+<img width="865" height="495" alt="Screenshot 2025-09-05 231906" src="https://github.com/user-attachments/assets/fb6243f0-f56f-4311-8c8f-ee709060a4bb" />
 
 
 https://github.com/user-attachments/assets/ebd9d128-fe53-47ae-aff4-20817c39f8d6
